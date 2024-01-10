@@ -190,7 +190,7 @@ def agentLabel = "${env.JENKINS_AGENT == null ? "":env.JENKINS_AGENT}"
 pipeline {
     agent { label agentLabel }
     environment {
-        DEFAULT_STAGE_SEQ = "'Initialization','Build','UnitTests','SonarQubeScan','BuildContainerImage','containerScan','Rapid7Scan','SysdigScan','PublishContainerImage','Deploy','FunctionalTests','Destroy'"
+        DEFAULT_STAGE_SEQ = "'Initialization','Build','UnitTests','SonarQubeScan','BuildContainerImage','containerImageScan','Rapid7Scan','SysdigScan','PublishContainerImage','Deploy','FunctionalTests','Destroy'"
         CUSTOM_STAGE_SEQ = "${DYNAMIC_JENKINS_STAGE_SEQUENCE}"
         PROJECT_TEMPLATE_ACTIVE = "${DYNAMIC_JENKINS_STAGE_NEEDED}"
         LIST = "${env.PROJECT_TEMPLATE_ACTIVE == 'true' ? env.CUSTOM_STAGE_SEQ : env.DEFAULT_STAGE_SEQ}"
@@ -330,7 +330,7 @@ pipeline {
                                     }
                             }
                         }
-                        else if ("${list[i]}" == "'containerScan'" && stage_flag['containerScan']) {
+                        else if ("${list[i]}" == "'containerImageScan'" && stage_flag['containerScan']) {
                             stage("Container Image Scan") {
                                 if (env.CONTAINERSCANTYPE == 'XRAY') {
                                     jf 'docker scan $REGISTRY_URL:$BUILD_TAG'
