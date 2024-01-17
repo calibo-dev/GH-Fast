@@ -239,6 +239,7 @@ pipeline {
                     env.TESTCASECOMMAND = metadataVars.testcaseCommand
                     env.TESTINGTOOLTYPE = metadataVars.testingToolType
                     env.BROWSERTYPE = metadataVars.browserType
+                    env.CONTAINERSCANTYPE = metadataVars.containerScanType
 
                     if (env.DEPLOYMENT_TYPE == 'KUBERNETES' || env.DEPLOYMENT_TYPE == 'OPENSHIFT'){
                         String kubeProperties = parseJsonString(env.JENKINS_METADATA,'kubernetes')
