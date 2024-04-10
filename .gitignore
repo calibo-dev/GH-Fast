@@ -2,3 +2,6 @@ venv/
 app/__pycache__/
 .idea
 *.pyc
+.coverage
+coverage*
+*.xml
