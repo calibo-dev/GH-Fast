@@ -8,6 +8,6 @@ context = os.getenv('context', '/')
 
 app = FastAPI()
 
-@app.get(context+'/')
+@app.get(context)
 async def read_index():
     return FileResponse(parent_dir_path + '/static/index.html')
