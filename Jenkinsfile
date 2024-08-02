@@ -319,12 +319,12 @@ pipeline {
 
                                     if (env.SONAR_CREDENTIAL_ID != null && env.SONAR_CREDENTIAL_ID != '') {
                                         withCredentials([usernamePassword(credentialsId: "$SONAR_CREDENTIAL_ID", usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
-                                          sh """docker run -v "$WORKSPACE":/app -w /app sonarsource/sonar-scanner-cli:11.0 -Dsonar.python.coverage.reportPath=coverage.xml -Dsonar.projectKey="${sonar_project_key}"  -Dsonar.sources=. -Dsonar.projectName="${sonar_project_key}" -Dsonar.host.url="${metadataVars.sonarHost}" -Dsonar.organization="${metadataVars.sonarOrg}" -Dsonar.login=$PASSWORD"""
+                                          sh """docker run -v "$WORKSPACE":/app -w /app sonarsource/sonar-scanner-cli:11.0 -Dsonar.python.coverage.reportPaths=coverage.xml -Dsonar.python.xunit.reportPath=testreport.xml -Dsonar.projectKey="${sonar_project_key}"  -Dsonar.sources=. -Dsonar.projectName="${sonar_project_key}" -Dsonar.host.url="${metadataVars.sonarHost}" -Dsonar.organization="${metadataVars.sonarOrg}" -Dsonar.login=$PASSWORD"""
                                         }
                                     }
                                     else{
                                         withSonarQubeEnv('pg-sonar') {
-                                            sh """docker run -v "$WORKSPACE":/app -w /app sonarsource/sonar-scanner-cli:11.0 -Dsonar.python.coverage.reportPath=coverage.xml -Dsonar.projectKey="${sonar_project_key}"  -Dsonar.sources=. -Dsonar.projectName="${sonar_project_key}" -Dsonar.host.url="$SONAR_HOST_URL" -Dsonar.organization="${metadataVars.sonarOrg}" -Dsonar.login=$SONAR_AUTH_TOKEN"""
+                                            sh """docker run -v "$WORKSPACE":/app -w /app sonarsource/sonar-scanner-cli:11.0 -Dsonar.python.coverage.reportPaths=coverage.xml -Dsonar.python.xunit.reportPath=testreport.xml -Dsonar.projectKey="${sonar_project_key}"  -Dsonar.sources=. -Dsonar.projectName="${sonar_project_key}" -Dsonar.host.url="$SONAR_HOST_URL" -Dsonar.organization="${metadataVars.sonarOrg}" -Dsonar.login=$SONAR_AUTH_TOKEN"""
                                         }
                                     }
                             }
