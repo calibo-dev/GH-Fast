@@ -210,8 +210,8 @@ pipeline {
         STAGE_FLAG = "${STAGE_FLAG}"
         JENKINS_METADATA = "${JENKINS_METADATA}"
 
-        PYTHON_IMAGE_VERSION = "3.9.5" //https://hub.docker.com/_/python/tags
-        KUBECTL_IMAGE_VERSION = "bitnami/kubectl:1.24.9" //https://hub.docker.com/r/bitnami/kubectl/tags
+        PYTHON_IMAGE_VERSION = "python:3.12.2-slim" //https://hub.docker.com/_/python/tags
+        KUBECTL_IMAGE_VERSION = "bitnami/kubectl:1.28" //https://hub.docker.com/r/bitnami/kubectl/tags
         HELM_IMAGE_VERSION = "alpine/helm:3.8.1" //https://hub.docker.com/r/alpine/helm/tags   
         OC_IMAGE_VERSION = "quay.io/openshift/origin-cli:4.9.0" //https://quay.io/repository/openshift/origin-cli?tab=tags
 
@@ -309,7 +309,7 @@ pipeline {
                             stage('Unit Tests') {
                                 print(list[i])
                                 // stage details here
-                                sh 'docker run --rm -v "$WORKSPACE":/app -w /app python:$PYTHON_IMAGE_VERSION /bin/sh unitTest.sh'
+                                sh 'docker run --rm -v "$WORKSPACE":/app -w /app $PYTHON_IMAGE_VERSION /bin/sh unitTest.sh'
                             }
                         } else if ("${list[i]}" == "'SonarQubeScan'" && env.ACTION == 'DEPLOY' && stage_flag['sonarScan']) {
                             stage('SonarQube Scan') {
@@ -319,12 +319,12 @@ pipeline {
 
                                     if (env.SONAR_CREDENTIAL_ID != null && env.SONAR_CREDENTIAL_ID != '') {
                                         withCredentials([usernamePassword(credentialsId: "$SONAR_CREDENTIAL_ID", usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
-                                          sh """docker run -v "$WORKSPACE":/app -w /app sonarsource/sonar-scanner-cli:4.7.0 -Dsonar.python.coverage.reportPath=coverage.xml -Dsonar.projectKey="${sonar_project_key}"  -Dsonar.sources=. -Dsonar.projectName="${sonar_project_key}" -Dsonar.host.url="${metadataVars.sonarHost}" -Dsonar.organization="${metadataVars.sonarOrg}" -Dsonar.login=$PASSWORD"""
+                                          sh """docker run -v "$WORKSPACE":/app -w /app sonarsource/sonar-scanner-cli:11.0 -Dsonar.python.coverage.reportPaths=coverage.xml -Dsonar.python.xunit.reportPath=testreport.xml -Dsonar.projectKey="${sonar_project_key}"  -Dsonar.sources=. -Dsonar.projectName="${sonar_project_key}" -Dsonar.host.url="${metadataVars.sonarHost}" -Dsonar.organization="${metadataVars.sonarOrg}" -Dsonar.login=$PASSWORD"""
                                         }
                                     }
                                     else{
                                         withSonarQubeEnv('pg-sonar') {
-                                            sh """docker run -v "$WORKSPACE":/app -w /app sonarsource/sonar-scanner-cli:4.7.0 -Dsonar.python.coverage.reportPath=coverage.xml -Dsonar.projectKey="${sonar_project_key}"  -Dsonar.sources=. -Dsonar.projectName="${sonar_project_key}" -Dsonar.host.url="$SONAR_HOST_URL" -Dsonar.organization="${metadataVars.sonarOrg}" -Dsonar.login=$SONAR_AUTH_TOKEN"""
+                                            sh """docker run -v "$WORKSPACE":/app -w /app sonarsource/sonar-scanner-cli:11.0 -Dsonar.python.coverage.reportPaths=coverage.xml -Dsonar.python.xunit.reportPath=testreport.xml -Dsonar.projectKey="${sonar_project_key}"  -Dsonar.sources=. -Dsonar.projectName="${sonar_project_key}" -Dsonar.host.url="$SONAR_HOST_URL" -Dsonar.organization="${metadataVars.sonarOrg}" -Dsonar.login=$SONAR_AUTH_TOKEN"""
                                         }
                                     }
                             }
