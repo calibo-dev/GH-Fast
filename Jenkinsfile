@@ -312,21 +312,22 @@ pipeline {
                                 sh 'docker run --rm -v "$WORKSPACE":/app -w /app $PYTHON_IMAGE_VERSION /bin/sh unitTest.sh'
                             }
                         } else if ("${list[i]}" == "'SonarQubeScan'" && env.ACTION == 'DEPLOY' && stage_flag['sonarScan']) {
-                            stage('SonarQube Scan') {
+                            stage('SonarQube Scan ') {
                                 // stage details here
-                                    def sonar_org = "${metadataVars.sonarOrg}";
-                                    def sonar_project_key = "${metadataVars.sonarProjectKey}";
+                                 env.sonar_org = "${metadataVars.sonarOrg}"
+                                 env.sonar_project_key = "${metadataVars.sonarProjectKey}"
+                                 env.sonar_host = "${metadataVars.sonarHost}"
 
-                                    if (env.SONAR_CREDENTIAL_ID != null && env.SONAR_CREDENTIAL_ID != '') {
-                                        withCredentials([usernamePassword(credentialsId: "$SONAR_CREDENTIAL_ID", usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
-                                          sh """docker run -v "$WORKSPACE":/app -w /app sonarsource/sonar-scanner-cli:11.0 -Dsonar.python.coverage.reportPaths=coverage.xml -Dsonar.python.xunit.reportPath=testreport.xml -Dsonar.projectKey="${sonar_project_key}"  -Dsonar.sources=. -Dsonar.projectName="${sonar_project_key}" -Dsonar.host.url="${metadataVars.sonarHost}" -Dsonar.organization="${metadataVars.sonarOrg}" -Dsonar.login=$PASSWORD"""
-                                        }
-                                    }
-                                    else{
-                                        withSonarQubeEnv('pg-sonar') {
-                                            sh """docker run -v "$WORKSPACE":/app -w /app sonarsource/sonar-scanner-cli:11.0 -Dsonar.python.coverage.reportPaths=coverage.xml -Dsonar.python.xunit.reportPath=testreport.xml -Dsonar.projectKey="${sonar_project_key}"  -Dsonar.sources=. -Dsonar.projectName="${sonar_project_key}" -Dsonar.host.url="$SONAR_HOST_URL" -Dsonar.organization="${metadataVars.sonarOrg}" -Dsonar.login=$SONAR_AUTH_TOKEN"""
-                                        }
-                                    }
+                                 if (env.SONAR_CREDENTIAL_ID != null && env.SONAR_CREDENTIAL_ID != '') {
+                                     withCredentials([usernamePassword(credentialsId: "$SONAR_CREDENTIAL_ID", usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
+                                       sh ''' docker run -v "$WORKSPACE":/app -w /app sonarsource/sonar-scanner-cli:11.0 -Dsonar.python.coverage.reportPaths=coverage.xml -Dsonar.python.xunit.reportPath=testreport.xml -Dsonar.projectKey="$sonar_project_key"  -Dsonar.sources=. -Dsonar.projectName="$sonar_project_key" -Dsonar.host.url="$sonar_host" -Dsonar.organization="$sonar_org" -Dsonar.login=$PASSWORD '''
+                                     }
+                                 }
+                                 else{
+                                     withSonarQubeEnv('pg-sonar') {
+                                         sh ''' docker run -v "$WORKSPACE":/app -w /app sonarsource/sonar-scanner-cli:11.0 -Dsonar.python.coverage.reportPaths=coverage.xml -Dsonar.python.xunit.reportPath=testreport.xml -Dsonar.projectKey="$sonar_project_key"  -Dsonar.sources=. -Dsonar.projectName="$sonar_project_key" -Dsonar.host.url="$SONAR_HOST_URL" -Dsonar.organization="$sonar_org" -Dsonar.login=$SONAR_AUTH_TOKEN '''
+                                     }
+                                 }
                             }
                         }
                         else if ("${list[i]}" == "'ContainerImageScan'" && stage_flag['containerScan']) {
@@ -518,10 +519,11 @@ pipeline {
                                     }
                                     if (env.DEPLOYMENT_TYPE == 'KUBERNETES' || env.DEPLOYMENT_TYPE == 'OPENSHIFT') {
                                         withCredentials([file(credentialsId: "$KUBE_SECRET", variable: 'KUBECONFIG'), usernamePassword(credentialsId: "$ARTIFACTORY_CREDENTIALS", usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
-                                            sh """
-                                                sed -i s+#SERVICE_NAME#+"${metadataVars.helmReleaseName}"+g ./helm_chart/values.yaml ./helm_chart/Chart.yaml
+                                            env.helmReleaseName = "${metadataVars.helmReleaseName}"
+                                            sh '''
+                                                sed -i s+#SERVICE_NAME#+"$helmReleaseName"+g ./helm_chart/values.yaml ./helm_chart/Chart.yaml
                                                 docker run --rm  --user root -v "$KUBECONFIG":"$KUBECONFIG" -e KUBECONFIG="$KUBECONFIG" $KUBECTL_IMAGE_VERSION create ns "$namespace_name" || true
-                                            """
+                                            '''
                                             if (env.DEPLOYMENT_TYPE == 'OPENSHIFT') {
                                               sh '''
                                                       COUNT=$(grep 'serviceAccount' Helm.yaml | wc -l)
@@ -548,13 +550,13 @@ pipeline {
                                                  docker run --rm  --user root -v "$KUBECONFIG":"$KUBECONFIG" -e KUBECONFIG="$KUBECONFIG" $KUBECTL_IMAGE_VERSION -n "$namespace_name" create secret docker-registry $kube_secret_name_for_registry --docker-server="$ACR_LOGIN_URL" --docker-username="\"$USERNAME\"" --docker-password="\"$PASSWORD\"" || true
                                                '''
                                            }
-                                           sh """
+                                           sh '''
                                            ls -lart
                                            echo "context: $CONTEXT" >> Helm.yaml
                                            cat Helm.yaml
-                                           sed -i s+#SERVICE_NAME#+"${metadataVars.helmReleaseName}"+g ./helm_chart/values.yaml ./helm_chart/Chart.yaml
-                                           docker run --rm  --user root -v "$KUBECONFIG":"$KUBECONFIG" -e KUBECONFIG="$KUBECONFIG" -v "$WORKSPACE":/apps -w /apps $HELM_IMAGE_VERSION upgrade --install "${metadataVars.helmReleaseName}" -n "$namespace_name" helm_chart --atomic --timeout 300s --set image.repository="$REGISTRY_URL" --set image.tag="$BUILD_TAG" --set image.registrySecret="$kube_secret_name_for_registry"  --set service.internalport="$SERVICE_PORT" -f Helm.yaml
-                                           """
+                                           sed -i s+#SERVICE_NAME#+"$helmReleaseName"+g ./helm_chart/values.yaml ./helm_chart/Chart.yaml
+                                           docker run --rm  --user root -v "$KUBECONFIG":"$KUBECONFIG" -e KUBECONFIG="$KUBECONFIG" -v "$WORKSPACE":/apps -w /apps $HELM_IMAGE_VERSION upgrade --install "$helmReleaseName" -n "$namespace_name" helm_chart --atomic --timeout 300s --set image.repository="$REGISTRY_URL" --set image.tag="$BUILD_TAG" --set image.registrySecret="$kube_secret_name_for_registry"  --set service.internalport="$SERVICE_PORT" -f Helm.yaml
+                                           '''
                                         }
                                     }
                                 }
@@ -578,9 +580,10 @@ pipeline {
                                 }
                                 if (env.DEPLOYMENT_TYPE == 'KUBERNETES' || env.DEPLOYMENT_TYPE == 'OPENSHIFT') {
                                     withCredentials([file(credentialsId: "$KUBE_SECRET", variable: 'KUBECONFIG')]) {
-                                        sh """
-                                        docker run --rm  --user root -v "$KUBECONFIG":"$KUBECONFIG" -e KUBECONFIG="$KUBECONFIG" -v "$WORKSPACE":/apps -w /apps $HELM_IMAGE_VERSION uninstall "${metadataVars.helmReleaseName}" -n "$namespace_name"
-                                        """
+                                        env.helmReleaseName = "${metadataVars.helmReleaseName}"
+                                        sh '''
+                                        docker run --rm  --user root -v "$KUBECONFIG":"$KUBECONFIG" -e KUBECONFIG="$KUBECONFIG" -v "$WORKSPACE":/apps -w /apps $HELM_IMAGE_VERSION uninstall "$helmReleaseName" -n "$namespace_name"
+                                        '''
                                     }
                                 }
                             }
