@@ -215,6 +215,7 @@ pipeline {
         HELM_IMAGE_VERSION = "alpine/helm:3.8.1" //https://hub.docker.com/r/alpine/helm/tags   
         OC_IMAGE_VERSION = "quay.io/openshift/origin-cli:4.9.0" //https://quay.io/repository/openshift/origin-cli?tab=tags
 
+
     }
 
     stages {
@@ -240,6 +241,7 @@ pipeline {
                     env.TESTINGTOOLTYPE = metadataVars.testingToolType
                     env.BROWSERTYPE = metadataVars.browserType
                     env.CONTAINERSCANTYPE = metadataVars.containerScanType
+
 
                     if (env.DEPLOYMENT_TYPE == 'KUBERNETES' || env.DEPLOYMENT_TYPE == 'OPENSHIFT'){
                         String kubeProperties = parseJsonString(env.JENKINS_METADATA,'kubernetes')
@@ -436,7 +438,7 @@ pipeline {
                                     }
                                   }
 
-                        } else if ("${list[i]}" == "'Deploy'") {
+                        } else if ("${list[i]}" == "'Deploy'" ) {
                             stage('Deploy') {
                                 // stage details here
 
