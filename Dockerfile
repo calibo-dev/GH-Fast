@@ -1,4 +1,4 @@
-FROM python:3.9
+FROM python:3.12.2-slim
 ENV context ''
 ENV port 8000 
 WORKDIR /code

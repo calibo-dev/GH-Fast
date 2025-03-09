@@ -190,7 +190,7 @@ def agentLabel = "${env.JENKINS_AGENT == null ? "":env.JENKINS_AGENT}"
 pipeline {
     agent { label agentLabel }
     environment {
-        DEFAULT_STAGE_SEQ = "'Initialization','Build','UnitTests','SonarQubeScan','BuildContainerImage','containerImageScan','Rapid7Scan','SysdigScan','PublishContainerImage','Deploy','FunctionalTests','Destroy'"
+        DEFAULT_STAGE_SEQ = "'Initialization','Build','UnitTests','SonarQubeScan','BuildContainerImage','ContainerImageScan','Rapid7Scan','SysdigScan','PublishContainerImage','Deploy','FunctionalTests','Destroy'"
         CUSTOM_STAGE_SEQ = "${DYNAMIC_JENKINS_STAGE_SEQUENCE}"
         PROJECT_TEMPLATE_ACTIVE = "${DYNAMIC_JENKINS_STAGE_NEEDED}"
         LIST = "${env.PROJECT_TEMPLATE_ACTIVE == 'true' ? env.CUSTOM_STAGE_SEQ : env.DEFAULT_STAGE_SEQ}"
@@ -210,8 +210,8 @@ pipeline {
         STAGE_FLAG = "${STAGE_FLAG}"
         JENKINS_METADATA = "${JENKINS_METADATA}"
 
-        PYTHON_IMAGE_VERSION = "3.9.5" //https://hub.docker.com/_/python/tags
-        KUBECTL_IMAGE_VERSION = "bitnami/kubectl:1.24.9" //https://hub.docker.com/r/bitnami/kubectl/tags
+        PYTHON_IMAGE_VERSION = "python:3.12.2-slim" //https://hub.docker.com/_/python/tags
+        KUBECTL_IMAGE_VERSION = "bitnami/kubectl:1.28" //https://hub.docker.com/r/bitnami/kubectl/tags
         HELM_IMAGE_VERSION = "alpine/helm:3.8.1" //https://hub.docker.com/r/alpine/helm/tags   
         OC_IMAGE_VERSION = "quay.io/openshift/origin-cli:4.9.0" //https://quay.io/repository/openshift/origin-cli?tab=tags
 
@@ -311,27 +311,28 @@ pipeline {
                             stage('Unit Tests') {
                                 print(list[i])
                                 // stage details here
-                                sh 'docker run --rm -v "$WORKSPACE":/app -w /app python:$PYTHON_IMAGE_VERSION /bin/sh unitTest.sh'
+                                sh 'docker run --rm -v "$WORKSPACE":/app -w /app $PYTHON_IMAGE_VERSION /bin/sh unitTest.sh'
                             }
                         } else if ("${list[i]}" == "'SonarQubeScan'" && env.ACTION == 'DEPLOY' && stage_flag['sonarScan']) {
-                            stage('SonarQube Scan') {
+                            stage('SonarQube Scan ') {
                                 // stage details here
-                                    def sonar_org = "${metadataVars.sonarOrg}";
-                                    def sonar_project_key = "${metadataVars.sonarProjectKey}";
+                                 env.sonar_org = "${metadataVars.sonarOrg}"
+                                 env.sonar_project_key = "${metadataVars.sonarProjectKey}"
+                                 env.sonar_host = "${metadataVars.sonarHost}"
 
-                                    if (env.SONAR_CREDENTIAL_ID != null && env.SONAR_CREDENTIAL_ID != '') {
-                                        withCredentials([usernamePassword(credentialsId: "$SONAR_CREDENTIAL_ID", usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
-                                          sh """docker run -v "$WORKSPACE":/app -w /app sonarsource/sonar-scanner-cli:4.7.0 -Dsonar.python.coverage.reportPath=coverage.xml -Dsonar.projectKey="${sonar_project_key}"  -Dsonar.sources=. -Dsonar.projectName="${sonar_project_key}" -Dsonar.host.url="${metadataVars.sonarHost}" -Dsonar.organization="${metadataVars.sonarOrg}" -Dsonar.login=$PASSWORD"""
-                                        }
-                                    }
-                                    else{
-                                        withSonarQubeEnv('pg-sonar') {
-                                            sh """docker run -v "$WORKSPACE":/app -w /app sonarsource/sonar-scanner-cli:4.7.0 -Dsonar.python.coverage.reportPath=coverage.xml -Dsonar.projectKey="${sonar_project_key}"  -Dsonar.sources=. -Dsonar.projectName="${sonar_project_key}" -Dsonar.host.url="$SONAR_HOST_URL" -Dsonar.organization="${metadataVars.sonarOrg}" -Dsonar.login=$SONAR_AUTH_TOKEN"""
-                                        }
-                                    }
+                                 if (env.SONAR_CREDENTIAL_ID != null && env.SONAR_CREDENTIAL_ID != '') {
+                                     withCredentials([usernamePassword(credentialsId: "$SONAR_CREDENTIAL_ID", usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
+                                       sh ''' docker run -v "$WORKSPACE":/app -w /app sonarsource/sonar-scanner-cli:11.0 -Dsonar.python.coverage.reportPaths=coverage.xml -Dsonar.python.xunit.reportPath=testreport.xml -Dsonar.projectKey="$sonar_project_key"  -Dsonar.sources=. -Dsonar.projectName="$sonar_project_key" -Dsonar.host.url="$sonar_host" -Dsonar.organization="$sonar_org" -Dsonar.login=$PASSWORD -Dsonar.token=$PASSWORD '''
+                                     }
+                                 }
+                                 else{
+                                     withSonarQubeEnv('pg-sonar') {
+                                         sh ''' docker run -v "$WORKSPACE":/app -w /app sonarsource/sonar-scanner-cli:11.0 -Dsonar.python.coverage.reportPaths=coverage.xml -Dsonar.python.xunit.reportPath=testreport.xml -Dsonar.projectKey="$sonar_project_key"  -Dsonar.sources=. -Dsonar.projectName="$sonar_project_key" -Dsonar.host.url="$SONAR_HOST_URL" -Dsonar.organization="$sonar_org" -Dsonar.login=$SONAR_AUTH_TOKEN -Dsonar.token=$SONAR_AUTH_TOKEN '''
+                                     }
+                                 }
                             }
                         }
-                        else if ("${list[i]}" == "'containerImageScan'" && stage_flag['containerScan']) {
+                        else if ("${list[i]}" == "'ContainerImageScan'" && stage_flag['containerScan']) {
                             stage("Container Image Scan") {
                                 if (env.CONTAINERSCANTYPE == 'XRAY') {
                                     jf 'docker scan $REGISTRY_URL:$BUILD_TAG'
@@ -462,6 +463,7 @@ pipeline {
                                         }
 
                                         sh 'ssh -o "StrictHostKeyChecking=no" ciuser@$DOCKERHOST "sleep 5s"'
+                                        sh 'ssh -o "StrictHostKeyChecking=no" ciuser@$DOCKERHOST "docker image prune -a -f"'
                                         sh 'ssh -o "StrictHostKeyChecking=no" ciuser@$DOCKERHOST "docker pull "$REGISTRY_URL:$BUILD_TAG""'
                                         sh """ssh -o "StrictHostKeyChecking=no" ciuser@$DOCKERHOST "docker stop ${metadataVars.repoName} || true && docker rm ${metadataVars.repoName} || true" """
                                             // Read Docker Vault properties
@@ -489,23 +491,25 @@ pipeline {
                                                     withVault([configuration: vaultConfigurations, vaultSecrets: [vaultSecretConfigData]]) {
                                                         def data = []
                                                         for(secret in dockerEnv){
-                                                            sh "echo $secret"
+                                                            sh "echo " + secret
                                                         }
-                                                        for(keys in secretkeys){
-                                                            sh "echo $keys=\$(cat .$keys) >> .secrets"
+                                                       for(keys in secretkeys){
+                                                            env.keys = "$keys"
+                                                             sh '''set +x; echo ${keys}=\$(cat .${keys}) >> .${RELEASE_NAME} '''
                                                         }
-                                                        sh 'cat .secrets;'
+                                                        sh '''set +x; cat .${RELEASE_NAME};'''
                                                     }
-                                                    def result = sh(script: 'cat .secrets', returnStdout: true)
-                                                    sh 'scp -o "StrictHostKeyChecking=no" .secrets ciuser@$DOCKERHOST:/home/ciuser/docker-env'
+                                                    // def result = sh(script: 'cat .${RELEASE_NAME}', returnStdout: true)
+                                                    sh 'scp -o "StrictHostKeyChecking=no" .${RELEASE_NAME} ciuser@$DOCKERHOST:/home/ciuser/.${RELEASE_NAME}'
                                                     //sh 'ssh -o "StrictHostKeyChecking=no" ciuser@$DOCKERHOST "echo $SECRETS > secrets"'
-                                                    sh 'rm -rf .secrets'
+                                                    sh 'rm -rf .${RELEASE_NAME}'
                                                     if (env.DEPLOYMENT_TYPE == 'EC2' && env.CONTEXT == 'null') {
-                                        sh """ ssh -o "StrictHostKeyChecking=no" ciuser@$DOCKERHOST "docker run -d --restart always --name ${metadataVars.repoName}  --env-file docker-env -p ${dockerData.hostPort}:$SERVICE_PORT -e port=$SERVICE_PORT $REGISTRY_URL:$BUILD_TAG" """
+                                        sh """ ssh -o "StrictHostKeyChecking=no" ciuser@$DOCKERHOST "docker run -d --restart always --name ${metadataVars.repoName}  --env-file .${RELEASE_NAME} -p ${dockerData.hostPort}:$SERVICE_PORT -e port=$SERVICE_PORT $REGISTRY_URL:$BUILD_TAG" """
                                                     }
                                                     else if (env.DEPLOYMENT_TYPE == 'EC2' && env.CONTEXT != 'null') {
-                                        sh """ ssh -o "StrictHostKeyChecking=no" ciuser@$DOCKERHOST "docker run -d --restart always --name ${metadataVars.repoName}  --env-file docker-env   -p ${dockerData.hostPort}:$SERVICE_PORT -e context=$CONTEXT -e port=$SERVICE_PORT $REGISTRY_URL:$BUILD_TAG" """
+                                        sh """ ssh -o "StrictHostKeyChecking=no" ciuser@$DOCKERHOST "docker run -d --restart always --name ${metadataVars.repoName}  --env-file .${RELEASE_NAME}   -p ${dockerData.hostPort}:$SERVICE_PORT -e context=$CONTEXT -e port=$SERVICE_PORT $REGISTRY_URL:$BUILD_TAG" """
                                                     }
+                                                    sh """ ssh -o "StrictHostKeyChecking=no" ciuser@$DOCKERHOST "rm -rf /home/ciuser/.${RELEASE_NAME}" """
                                                 }
                                             }
                                             else {
@@ -520,10 +524,11 @@ pipeline {
                                     }
                                     if (env.DEPLOYMENT_TYPE == 'KUBERNETES' || env.DEPLOYMENT_TYPE == 'OPENSHIFT') {
                                         withCredentials([file(credentialsId: "$KUBE_SECRET", variable: 'KUBECONFIG'), usernamePassword(credentialsId: "$ARTIFACTORY_CREDENTIALS", usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
-                                            sh """
-                                                sed -i s+#SERVICE_NAME#+"${metadataVars.helmReleaseName}"+g ./helm_chart/values.yaml ./helm_chart/Chart.yaml
+                                            env.helmReleaseName = "${metadataVars.helmReleaseName}"
+                                            sh '''
+                                                sed -i s+#SERVICE_NAME#+"$helmReleaseName"+g ./helm_chart/values.yaml ./helm_chart/Chart.yaml
                                                 docker run --rm  --user root -v "$KUBECONFIG":"$KUBECONFIG" -e KUBECONFIG="$KUBECONFIG" $KUBECTL_IMAGE_VERSION create ns "$namespace_name" || true
-                                            """
+                                            '''
                                             if (env.DEPLOYMENT_TYPE == 'OPENSHIFT') {
                                               sh '''
                                                       COUNT=$(grep 'serviceAccount' Helm.yaml | wc -l)
@@ -550,13 +555,13 @@ pipeline {
                                                  docker run --rm  --user root -v "$KUBECONFIG":"$KUBECONFIG" -e KUBECONFIG="$KUBECONFIG" $KUBECTL_IMAGE_VERSION -n "$namespace_name" create secret docker-registry $kube_secret_name_for_registry --docker-server="$ACR_LOGIN_URL" --docker-username="\"$USERNAME\"" --docker-password="\"$PASSWORD\"" || true
                                                '''
                                            }
-                                           sh """
+                                           sh '''
                                            ls -lart
                                            echo "context: $CONTEXT" >> Helm.yaml
                                            cat Helm.yaml
-                                           sed -i s+#SERVICE_NAME#+"${metadataVars.helmReleaseName}"+g ./helm_chart/values.yaml ./helm_chart/Chart.yaml
-                                           docker run --rm  --user root -v "$KUBECONFIG":"$KUBECONFIG" -e KUBECONFIG="$KUBECONFIG" -v "$WORKSPACE":/apps -w /apps $HELM_IMAGE_VERSION upgrade --install "${metadataVars.helmReleaseName}" -n "$namespace_name" helm_chart --atomic --timeout 300s --set image.repository="$REGISTRY_URL" --set image.tag="$BUILD_TAG" --set image.registrySecret="$kube_secret_name_for_registry"  --set service.internalport="$SERVICE_PORT" -f Helm.yaml
-                                           """
+                                           sed -i s+#SERVICE_NAME#+"$helmReleaseName"+g ./helm_chart/values.yaml ./helm_chart/Chart.yaml
+                                           docker run --rm  --user root -v "$KUBECONFIG":"$KUBECONFIG" -e KUBECONFIG="$KUBECONFIG" -v "$WORKSPACE":/apps -w /apps $HELM_IMAGE_VERSION upgrade --install "$helmReleaseName" -n "$namespace_name" helm_chart --atomic --timeout 300s --set image.repository="$REGISTRY_URL" --set image.tag="$BUILD_TAG" --set image.registrySecret="$kube_secret_name_for_registry"  --set service.internalport="$SERVICE_PORT" -f Helm.yaml
+                                           '''
                                         }
                                     }
                                 }
@@ -580,9 +585,10 @@ pipeline {
                                 }
                                 if (env.DEPLOYMENT_TYPE == 'KUBERNETES' || env.DEPLOYMENT_TYPE == 'OPENSHIFT') {
                                     withCredentials([file(credentialsId: "$KUBE_SECRET", variable: 'KUBECONFIG')]) {
-                                        sh """
-                                        docker run --rm  --user root -v "$KUBECONFIG":"$KUBECONFIG" -e KUBECONFIG="$KUBECONFIG" -v "$WORKSPACE":/apps -w /apps $HELM_IMAGE_VERSION uninstall "${metadataVars.helmReleaseName}" -n "$namespace_name"
-                                        """
+                                        env.helmReleaseName = "${metadataVars.helmReleaseName}"
+                                        sh '''
+                                        docker run --rm  --user root -v "$KUBECONFIG":"$KUBECONFIG" -e KUBECONFIG="$KUBECONFIG" -v "$WORKSPACE":/apps -w /apps $HELM_IMAGE_VERSION uninstall "$helmReleaseName" -n "$namespace_name"
+                                        '''
                                     }
                                 }
                             }
